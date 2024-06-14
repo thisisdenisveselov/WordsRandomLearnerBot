@@ -1,62 +1,44 @@
 package com.veselov.wrlbot.WordsRandomLearnerBot.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import lombok.Data;
 
 import java.sql.Timestamp;
+import java.util.List;
 
 @Entity(name = "usersData")
+@Data
 public class User {
     @Id
+    @Column(name = "id")
     private Long chatId;
 
+    @Column(name = "first_name")
     private String firstName;
 
+    @Column(name = "last_name")
     private String lastName;
 
+    @Column(name = "user_name")
     private String userName;
 
+    @Column(name = "registered_at")
     private Timestamp registeredAt;
 
-    public Long getChatId() {
-        return chatId;
-    }
+    @Column(name = "current_language")
+    private String currentLanguage;
 
-    public void setChatId(Long chatId) {
-        this.chatId = chatId;
-    }
+    @Column(name = "last_phrase_id")
+    private Integer lastPhraseId;
 
-    public String getFirstName() {
-        return firstName;
-    }
+    @Column(name = "current_step_number")
+    private int currentStepNumber; //current step(request for phrase translation) in the chat
 
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
-
-    public String getLastName() {
-        return lastName;
-    }
-
-    public void setLastName(String lastName) {
-        this.lastName = lastName;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
-    }
-
-    public Timestamp getRegisteredAt() {
-        return registeredAt;
-    }
-
-    public void setRegisteredAt(Timestamp registeredAt) {
-        this.registeredAt = registeredAt;
-    }
+    @OneToMany(mappedBy = "user")
+    private List<Translation> translations;
 
     @Override
     public String toString() {
@@ -66,6 +48,8 @@ public class User {
                 ", lastName='" + lastName + '\'' +
                 ", userName='" + userName + '\'' +
                 ", registeredAt=" + registeredAt +
+                ", currentLanguage='" + currentLanguage + '\'' +
+                ", lastPhraseId=" + lastPhraseId +
                 '}';
     }
 }

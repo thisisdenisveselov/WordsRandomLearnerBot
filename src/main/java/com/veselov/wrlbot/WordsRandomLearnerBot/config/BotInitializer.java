@@ -13,6 +13,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 @Slf4j //lombok library. creates object that accessible through "log" variable. use it to write logs
 @Component
+@AllArgsConstructor // generates constructor. *test without this
 public class BotInitializer {
 
     @Autowired
