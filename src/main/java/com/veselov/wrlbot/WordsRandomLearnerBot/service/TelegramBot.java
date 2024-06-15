@@ -12,11 +12,13 @@ import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
@@ -24,7 +26,10 @@ import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScope
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import java.io.FileInputStream;
+
+import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.sql.Timestamp;
 import java.util.*;
 
@@ -48,18 +53,11 @@ public class TelegramBot extends TelegramLongPollingBot {
             "Type /help to see this message again";
     private static final String ENGLISH = "English";
     private static final String RUSSIAN = "Russian";
-    /*private static final int NO_BUTTONS = 0;
-    private static final int ONE_BUTTON = 1;
-
-    private static final int TWO_BUTTONS = 2;
-    private static final int THREE_BUTTONS = 3;
-    private static final int FOUR_BUTTONS = 4;*/
     private static final int STEPS_AMOUNT = 30;  // the number of iterations after which the phrase can be shown again
     private static final String UPDATE_BUTTON = "UPDATE_BUTTON";
     private static final String FROM_ENG_BUTTON = "FROM_ENG_BUTTON";
     private static final String FROM_RU_BUTTON = "FROM_RU_BUTTON";
     private static final String TRANSLATION_BUTTON = "TRANSLATION_BUTTON";
-    private static final String NEXT_BUTTON = "NEXT_BUTTON";
     private static final String KNOW_BUTTON = "KNOW_BUTTON";
     private static final String DO_NOT_KNOW_BUTTON = "DO_NOT_KNOW_BUTTON";
 
@@ -117,7 +115,24 @@ public class TelegramBot extends TelegramLongPollingBot {
                 default -> commandNotFound(chatId);
             }
 
-        } else if (update.hasCallbackQuery()) {
+        } /*else if (update.hasMessage() && update.getMessage().hasDocument()) {
+            long chatId = update.getMessage().getChatId();
+            Document document = update.getMessage().getDocument();
+            
+            if (document != null) {
+                String fileId = document.getFileId();
+                String fileName = document.getFileName();
+                
+                uploadFile(chatId, fileName, fileId);
+            }
+            
+          *//*
+            FileInputStream inputStream = new FileInputStream(excelFilePath);
+
+            XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
+            XSSFSheet sheet = workbook.getSheetAt(0);*//*
+
+        }*/ else if (update.hasCallbackQuery()) {
             String callBackData = update.getCallbackQuery().getData();
             long chatId = update.getCallbackQuery().getMessage().getChatId();
            // long messageId = update.getCallbackQuery().getMessage().getMessageId();
@@ -126,7 +141,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case UPDATE_BUTTON -> updatePhrases(chatId);
                 case FROM_ENG_BUTTON -> showNext(chatId, ENGLISH); //happened, if "Phrases list has been updated" occurred, and "From English" pressed
                 case FROM_RU_BUTTON -> showNext(chatId, RUSSIAN); //happened, if "Phrases list has been updated" occurred, and "From Russian" pressed
-                //case NEXT_BUTTON -> showNext(chatId, null);
                 case TRANSLATION_BUTTON -> showTranslation(chatId);
                 case KNOW_BUTTON -> {
                     changePriority(chatId, false); //phrase should occur less frequently
@@ -140,6 +154,104 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+   /* private void uploadFile(long chatId, String fileName, String fileId) {
+        try {
+
+            URL url = new URL("https://api.telegram.org/bot" + config.getToken() + "/getFile?file_id=" + fileId);
+
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader( url.openStream()));
+            String getFileResponse = bufferedReader.readLine();
+
+            JSONObject jResult = new JSONObject(getFileResponse);
+            JSONObject path = jResult.getJSONObject("result");
+            String filePath = path.getString("file_path");
+
+            InputStream inputStream = new URL("https://api.telegram.org/file/bot" + config.getToken() + "/" + filePath).openStream();
+
+          //  String excelFilePath = ".\\db\\Saved translations.xlsx";
+          //  FileInputStream inputStream = new FileInputStream(excelFilePath);
+
+            XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
+            XSSFSheet sheet = workbook.getSheetAt(0);
+
+            User user = userRepository.findById(chatId).orElse(null);
+
+            Iterator iterator = sheet.iterator();
+
+            while (iterator.hasNext()) {
+                XSSFRow row = (XSSFRow) iterator.next();
+
+                Iterator cellIterator = row.cellIterator();
+
+                int columnNumber = 0;
+                String languageFrom = "";
+                String languageTo = "";
+                String phrase = "";
+                String phraseTranslation = "";
+
+                while (cellIterator.hasNext()) {
+                    XSSFCell cell = (XSSFCell) cellIterator.next();
+                    String value = cell.getStringCellValue();
+
+                    switch (columnNumber) {
+                        case 0 -> languageFrom = value;
+                        case 1 -> languageTo = value;
+                        case 2 -> phrase = value;
+                        case 3 -> phraseTranslation = value;
+                    }
+
+                    columnNumber++;
+
+                }
+
+                Translation translation = new Translation();
+
+                if ((!languageFrom.equals(ENGLISH) && !languageFrom.equals(RUSSIAN))
+                        || (!languageTo.equals(ENGLISH) && !languageTo.equals(RUSSIAN)))  //if neither English nor Russian
+                    continue;
+
+                switch (languageFrom) {
+                    case ENGLISH -> {
+                        translation.setPhraseEng(phrase);
+                        translation.setPhraseRu(phraseTranslation);
+                    }
+                    case RUSSIAN -> {
+                        translation.setPhraseEng(phraseTranslation);
+                        translation.setPhraseRu(phrase);
+                    }
+                }
+
+                translation.setPriority(0);
+                translation.setUser(user);
+                translation.setStepNumber(0);
+
+                translationRepository.save(translation);
+
+            }
+
+            bufferedReader.close();
+            inputStream.close();
+        } catch (Exception e) {
+            log.error(Arrays.toString(e.getStackTrace()));
+        }
+
+        String answer = "Phrases list has been updated";
+        prepareAndSendMessage(answer, chatId, ButtonsVariations.FROM_RU_ENG);
+
+
+
+
+        *//*URL downoload = new URL("https://api.telegram.org/file/bot" + token + "/" + file_path);
+        FileOutputStream fos = new FileOutputStream(upPath + file_name);
+        System.out.println("Start upload");
+        ReadableByteChannel rbc = Channels.newChannel(downoload.openStream());
+        fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
+        fos.close();
+        rbc.close();
+        uploadFlag = 0;
+        System.out.println("Uploaded!");*//*
+    }
+*/
     private void changePriority(long chatId, boolean increase) {
         User user = userRepository.findById(chatId).orElse(null);
         Integer lastPhraseId = user.getLastPhraseId();
@@ -223,6 +335,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
             XSSFSheet sheet = workbook.getSheetAt(0);
 
+            User user = userRepository.findById(chatId).orElse(null);
+
             Iterator iterator = sheet.iterator();
 
             while (iterator.hasNext()) {
@@ -269,7 +383,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
 
                 translation.setPriority(0);
-                translation.setUser(userRepository.findById(chatId).orElse(null));
+                translation.setUser(user);
                 translation.setStepNumber(0);
 
                 translationRepository.save(translation);
@@ -353,13 +467,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                 addButton(inLineRow, "From Russian", FROM_RU_BUTTON);
             }
             case KNOW_DO_NOT_KNOW -> {
-              //  addButton(inLineRow, "Next", NEXT_BUTTON);
                 addButton(inLineRow, "I know", KNOW_BUTTON);
                 addButton(inLineRow, "I don't know", DO_NOT_KNOW_BUTTON);
             }
             case WITH_TRANSLATION -> {
                 addButton(inLineRow, "Translation", TRANSLATION_BUTTON);
-             //   addButton(inLineRow, "Next", NEXT_BUTTON);
                 addButton(inLineRow, "I know", KNOW_BUTTON);
                 addButton(inLineRow, "I don't know", DO_NOT_KNOW_BUTTON);
             }
