@@ -31,7 +31,7 @@ public class BotConfig {
 
     private final Environment environment;
 
-    @Autowired
+    /*@Autowired
     public BotConfig(Environment environment) {
         this.environment = environment;
     }
@@ -50,6 +50,6 @@ public class BotConfig {
     @Bean
     public JdbcTemplate jdbcTemplate() {
         return new JdbcTemplate(dataSource());
-    }
+    }*/
 
 }

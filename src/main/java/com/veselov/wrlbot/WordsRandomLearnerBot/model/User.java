@@ -1,9 +1,6 @@
 package com.veselov.wrlbot.WordsRandomLearnerBot.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.*;
 import lombok.Data;
 
 import java.sql.Timestamp;
@@ -13,7 +10,8 @@ import java.util.List;
 @Data
 public class User {
     @Id
-    @Column(name = "id")
+   // @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "chat_id")
     private Long chatId;
 
     @Column(name = "first_name")

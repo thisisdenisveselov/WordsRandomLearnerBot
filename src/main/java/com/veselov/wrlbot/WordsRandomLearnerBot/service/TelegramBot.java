@@ -2,7 +2,6 @@ package com.veselov.wrlbot.WordsRandomLearnerBot.service;
 
 import com.vdurmont.emoji.EmojiParser;
 import com.veselov.wrlbot.WordsRandomLearnerBot.config.BotConfig;
-import com.veselov.wrlbot.WordsRandomLearnerBot.dao.TranslationDAO;
 import com.veselov.wrlbot.WordsRandomLearnerBot.model.*;
 import com.veselov.wrlbot.WordsRandomLearnerBot.repositories.TranslationRepository;
 import com.veselov.wrlbot.WordsRandomLearnerBot.repositories.UserRepository;
@@ -28,7 +27,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.*;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.sql.Timestamp;
 import java.util.*;
@@ -43,8 +41,8 @@ public class TelegramBot extends TelegramLongPollingBot {
     private UserRepository userRepository;
     @Autowired
     private TranslationRepository translationRepository;
-    @Autowired
-    private TranslationDAO translationDAO;
+ /*   @Autowired
+    private TranslationDAO translationDAO;*/
 
     static final String HELP_TEXT = "This bot is created to make it easier to remember new English words. \n\n" +
             "You can execute commands from the main menu on the left or by typing a command: \n\n" +
@@ -113,9 +111,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
                 case "/translation" -> showTranslation(chatId);
                 default -> commandNotFound(chatId);
+
             }
 
-        } /*else if (update.hasMessage() && update.getMessage().hasDocument()) {
+        } else if (update.hasMessage() && update.getMessage().hasDocument()) {
             long chatId = update.getMessage().getChatId();
             Document document = update.getMessage().getDocument();
             
@@ -126,13 +125,13 @@ public class TelegramBot extends TelegramLongPollingBot {
                 uploadFile(chatId, fileName, fileId);
             }
             
-          *//*
-            FileInputStream inputStream = new FileInputStream(excelFilePath);
+
+            /*FileInputStream inputStream = new FileInputStream(excelFilePath);
 
             XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
-            XSSFSheet sheet = workbook.getSheetAt(0);*//*
+            XSSFSheet sheet = workbook.getSheetAt(0);*/
 
-        }*/ else if (update.hasCallbackQuery()) {
+        } else if (update.hasCallbackQuery()) {
             String callBackData = update.getCallbackQuery().getData();
             long chatId = update.getCallbackQuery().getMessage().getChatId();
            // long messageId = update.getCallbackQuery().getMessage().getMessageId();
@@ -154,7 +153,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-   /* private void uploadFile(long chatId, String fileName, String fileId) {
+    private void uploadFile(long chatId, String fileName, String fileId) {
         try {
 
             URL url = new URL("https://api.telegram.org/bot" + config.getToken() + "/getFile?file_id=" + fileId);
@@ -174,7 +173,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
             XSSFSheet sheet = workbook.getSheetAt(0);
 
-            User user = userRepository.findById(chatId).orElse(null);
+            User user = userRepository.findUserByChatId(chatId);
 
             Iterator iterator = sheet.iterator();
 
@@ -241,7 +240,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
 
 
-        *//*URL downoload = new URL("https://api.telegram.org/file/bot" + token + "/" + file_path);
+        /*URL downoload = new URL("https://api.telegram.org/file/bot" + token + "/" + file_path);
         FileOutputStream fos = new FileOutputStream(upPath + file_name);
         System.out.println("Start upload");
         ReadableByteChannel rbc = Channels.newChannel(downoload.openStream());
@@ -249,11 +248,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         fos.close();
         rbc.close();
         uploadFlag = 0;
-        System.out.println("Uploaded!");*//*
+        System.out.println("Uploaded!");*/
     }
-*/
     private void changePriority(long chatId, boolean increase) {
-        User user = userRepository.findById(chatId).orElse(null);
+        User user = userRepository.findUserByChatId(chatId);
         Integer lastPhraseId = user.getLastPhraseId();
 
         Translation translation = translationRepository.findById(lastPhraseId).orElse(null);
@@ -266,7 +264,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void setCurrentLanguage(String language, long chatId) {
-        User user = userRepository.findById(chatId).orElse(null);
+        User user = userRepository.findUserByChatId(chatId);
 
         if (user != null)
             user.setCurrentLanguage(language);
@@ -274,9 +272,11 @@ public class TelegramBot extends TelegramLongPollingBot {
         userRepository.save(user);
     }
     private void showNext(long chatId, String forcedLanguage) {
-        Translation translation = translationDAO.getTranslation(chatId, STEPS_AMOUNT);
+      //  Translation translation = translationDAO.getTranslation(chatId, STEPS_AMOUNT);
+        Translation translation = translationRepository.findCustomRandomPhrase(chatId, STEPS_AMOUNT);
 
-        User user = userRepository.findById(chatId).orElse(null);
+        //User user = userRepository.findById(chatId).orElse(null);
+        User user = translation.getUser(); //possible because manyToOne relation has Eager loading
 
         String currentLanguage = "";
 
@@ -302,7 +302,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         int currentStepNumber = user.getCurrentStepNumber() + 1;
         translation.setStepNumber(currentStepNumber);
-        translation.setUser(userRepository.findById(chatId).orElse(null));
+       // translation.setUser(user);  //possibly do not need this
         translationRepository.save(translation);
 
         user.setCurrentStepNumber(currentStepNumber);
@@ -312,7 +312,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void showTranslation(long chatId) {
-        User user = userRepository.findById(chatId).orElse(null);  // check if it is ok to write like that !
+        User user = userRepository.findUserByChatId(chatId);  // check if it is ok to write like that !
 
         Integer lastPhraseId = user.getLastPhraseId();
         String currentLanguage = user.getCurrentLanguage();
@@ -335,7 +335,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
             XSSFSheet sheet = workbook.getSheetAt(0);
 
-            User user = userRepository.findById(chatId).orElse(null);
+            User user = userRepository.findUserByChatId(chatId);
 
             Iterator iterator = sheet.iterator();
 
@@ -405,7 +405,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void registerUser(Message msg) {
 
-        if(userRepository.findById(msg.getChatId()).isEmpty()) {
+        if(userRepository.findUserByChatId(msg.getChatId()) == null) {  // TEST it!!!!
 
             var chatId = msg.getChatId();
             var chat = msg.getChat();
