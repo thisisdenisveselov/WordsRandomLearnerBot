@@ -8,7 +8,7 @@ import lombok.Data;
 public class Translation {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Integer id;
 
@@ -25,6 +25,7 @@ public class Translation {
     private int stepNumber; // the step ordinal number when was the last time this phrase occurred
 
     @ManyToOne
-    @JoinColumn(name = "user_id", referencedColumnName = "id")
+    @JoinColumn(name = "user_id", referencedColumnName = "chat_id")
     private User user;
+
 }
