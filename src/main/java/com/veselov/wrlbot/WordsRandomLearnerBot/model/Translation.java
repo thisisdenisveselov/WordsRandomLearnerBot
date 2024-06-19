@@ -8,7 +8,7 @@ import lombok.Data;
 public class Translation {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "translation_seq")
     @Column(name = "id")
     private Integer id;
 
@@ -28,4 +28,23 @@ public class Translation {
     @JoinColumn(name = "user_id", referencedColumnName = "chat_id")
     private User user;
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Translation that = (Translation) o;
+
+        if (!phraseEng.equals(that.phraseEng)) return false;
+        if (!phraseRu.equals(that.phraseRu)) return false;
+        return user.equals(that.user);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = phraseEng.hashCode();
+        result = 31 * result + phraseRu.hashCode();
+        result = 31 * result + user.hashCode();
+        return result;
+    }
 }

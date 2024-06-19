@@ -50,4 +50,19 @@ public class User {
                 ", lastPhraseId=" + lastPhraseId +
                 '}';
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        User user = (User) o;
+
+        return chatId.equals(user.chatId);
+    }
+
+    @Override
+    public int hashCode() {
+        return chatId.hashCode();
+    }
 }

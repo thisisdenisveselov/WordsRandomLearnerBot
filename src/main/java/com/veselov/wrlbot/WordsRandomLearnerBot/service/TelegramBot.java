@@ -36,13 +36,10 @@ import java.util.*;
 public class TelegramBot extends TelegramLongPollingBot {
 
     final BotConfig config;
-
     @Autowired
     private UserRepository userRepository;
     @Autowired
     private TranslationRepository translationRepository;
- /*   @Autowired
-    private TranslationDAO translationDAO;*/
 
     static final String HELP_TEXT = "This bot is created to make it easier to remember new English words. \n\n" +
             "You can execute commands from the main menu on the left or by typing a command: \n\n" +
@@ -58,8 +55,10 @@ public class TelegramBot extends TelegramLongPollingBot {
     private static final String TRANSLATION_BUTTON = "TRANSLATION_BUTTON";
     private static final String KNOW_BUTTON = "KNOW_BUTTON";
     private static final String DO_NOT_KNOW_BUTTON = "DO_NOT_KNOW_BUTTON";
-
     private static final Long ADMIN_CHAT_ID = 291573027L;
+    private static final int DEFAULT_PRIORITY = 0;
+    private static final int DEFAULT_STEP_NUMBER = 0;
+
 
     public TelegramBot(BotConfig config) {
         this.config = config;
@@ -160,7 +159,6 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void uploadFile(User user, String fileId) {
         try {
-
             URL url = new URL("https://api.telegram.org/bot" + config.getToken() + "/getFile?file_id=" + fileId);
 
             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader( url.openStream()));
@@ -170,16 +168,19 @@ public class TelegramBot extends TelegramLongPollingBot {
             JSONObject path = jResult.getJSONObject("result");
             String filePath = path.getString("file_path");
 
-            InputStream inputStream = new URL("https://api.telegram.org/file/bot" + config.getToken() + "/" + filePath).openStream();
-
-          //  String excelFilePath = ".\\db\\Saved translations.xlsx";
-          //  FileInputStream inputStream = new FileInputStream(excelFilePath);
+            InputStream inputStream = new URL(
+                    "https://api.telegram.org/file/bot" + config.getToken() + "/" + filePath).openStream();
 
             XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
+
+            bufferedReader.close();
+            inputStream.close();
+
             XSSFSheet sheet = workbook.getSheetAt(0);
+            Iterator iterator = sheet.iterator();
 
             List<Translation> translations = new ArrayList<>();
-            Iterator iterator = sheet.iterator();
+            List<Translation> translationsOld = translationRepository.findAllByUser(user);
 
             while (iterator.hasNext()) {
                 XSSFRow row = (XSSFRow) iterator.next();
@@ -210,7 +211,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 Translation translation = new Translation();
 
                 if ((!languageFrom.equals(ENGLISH) && !languageFrom.equals(RUSSIAN))
-                        || (!languageTo.equals(ENGLISH) && !languageTo.equals(RUSSIAN)))  //if neither English nor Russian
+                        || (!languageTo.equals(ENGLISH) && !languageTo.equals(RUSSIAN)))  //filter if neither English nor Russian
                     continue;
 
                 switch (languageFrom) {
@@ -224,16 +225,23 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                 }
 
-                translation.setPriority(0);
+                translation.setPriority(DEFAULT_PRIORITY);
                 translation.setUser(user);
-                translation.setStepNumber(0);
+                translation.setStepNumber(DEFAULT_STEP_NUMBER);
 
                 translations.add(translation);
             }
+
+            if (!translationsOld.isEmpty()) {
+                List<Translation> translationsToDelete = new ArrayList<>(translationsOld);
+                translationsToDelete.removeAll(translations);
+
+                translations.removeAll(translationsOld);
+
+                translationRepository.deleteAll(translationsToDelete);
+            }
             translationRepository.saveAll(translations);
 
-            bufferedReader.close();
-            inputStream.close();
         } catch (Exception e) {
             log.error(Arrays.toString(e.getStackTrace()));
         }
@@ -311,85 +319,23 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void useDefaultPhrases(long chatId, User user) {
 
-        copyPhrases(user);  //should copy default phrases to translations table with users id
+        Optional<User> sourceUser = userRepository.findById(ADMIN_CHAT_ID);
+        if(sourceUser.isPresent())
+            copyPhrases(user, sourceUser.get());  //should copy default phrases to translations table with users id
+        else
+            prepareAndSendMessage("No default list of phrases", chatId, ButtonsVariations.NO_BUTTONS);
 
         String answer = "Choose \"From English to Russian\" or \"From Russian to English\" translations";
         prepareAndSendMessage(answer, chatId, ButtonsVariations.FROM_RU_ENG);
-
-       /* try {
-            String excelFilePath = ".\\db\\Saved translations.xlsx";
-            FileInputStream inputStream = new FileInputStream(excelFilePath);
-
-            XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
-            XSSFSheet sheet = workbook.getSheetAt(0);
-
-            User user = userRepository.findUserByChatId(chatId);
-
-            Iterator iterator = sheet.iterator();
-
-            while (iterator.hasNext()) {
-                XSSFRow row = (XSSFRow) iterator.next();
-
-                Iterator cellIterator = row.cellIterator();
-
-                int columnNumber = 0;
-                String languageFrom = "";
-                String languageTo = "";
-                String phrase = "";
-                String phraseTranslation = "";
-
-                while (cellIterator.hasNext()) {
-                    XSSFCell cell = (XSSFCell) cellIterator.next();
-                    String value = cell.getStringCellValue();
-
-                    switch (columnNumber) {
-                        case 0 -> languageFrom = value;
-                        case 1 -> languageTo = value;
-                        case 2 -> phrase = value;
-                        case 3 -> phraseTranslation = value;
-                    }
-
-                    columnNumber++;
-
-                }
-
-                Translation translation = new Translation();
-
-                if ((!languageFrom.equals(ENGLISH) && !languageFrom.equals(RUSSIAN))
-                        || (!languageTo.equals(ENGLISH) && !languageTo.equals(RUSSIAN)))  //if neither English nor Russian
-                    continue;
-
-                switch (languageFrom) {
-                    case ENGLISH -> {
-                        translation.setPhraseEng(phrase);
-                        translation.setPhraseRu(phraseTranslation);
-                    }
-                    case RUSSIAN -> {
-                        translation.setPhraseEng(phraseTranslation);
-                        translation.setPhraseRu(phrase);
-                    }
-                }
-
-                translation.setPriority(0);
-                translation.setUser(user);
-                translation.setStepNumber(0);
-
-                translationRepository.save(translation);
-            }
-        } catch (Exception e) {
-            log.error(Arrays.toString(e.getStackTrace()));
-        }*/
-
-
     }
 
-    private void copyPhrases(User user) { // Test it !!!!
-        List<Translation> translations = translationRepository.findAllByUser(user);
+    private void copyPhrases(User user, User sourceUser) { // Test it !!!!
+        List<Translation> translations = translationRepository.findAllByUser(sourceUser);
 
         for(Translation translation : translations) {
             translation.setId(null);
-            translation.setPriority(0);
-            translation.setStepNumber(0);
+            translation.setPriority(DEFAULT_PRIORITY);
+            translation.setStepNumber(DEFAULT_STEP_NUMBER);
             translation.setUser(user);
         }
 
@@ -419,7 +365,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             user.setLastName(chat.getLastName());
             user.setUserName(chat.getUserName());
             user.setRegisteredAt(new Timestamp(System.currentTimeMillis()));
-            user.setCurrentStepNumber(0);
+            user.setCurrentStepNumber(DEFAULT_STEP_NUMBER);
 
             userRepository.save(user);
             log.info("User saved: " + user);
