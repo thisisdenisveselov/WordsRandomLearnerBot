@@ -159,22 +159,9 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void uploadFile(User user, String fileId) {
         try {
-            URL url = new URL("https://api.telegram.org/bot" + config.getToken() + "/getFile?file_id=" + fileId);
-
-            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader( url.openStream()));
-            String getFileResponse = bufferedReader.readLine();
-
-            JSONObject jResult = new JSONObject(getFileResponse);
-            JSONObject path = jResult.getJSONObject("result");
-            String filePath = path.getString("file_path");
-
-            InputStream inputStream = new URL(
-                    "https://api.telegram.org/file/bot" + config.getToken() + "/" + filePath).openStream();
+            InputStream inputStream = getDataFromFile(fileId);
 
             XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
-
-            bufferedReader.close();
-            inputStream.close();
 
             XSSFSheet sheet = workbook.getSheetAt(0);
             Iterator iterator = sheet.iterator();
@@ -234,19 +221,43 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             if (!translationsOld.isEmpty()) {
                 List<Translation> translationsToDelete = new ArrayList<>(translationsOld);
-                translationsToDelete.removeAll(translations);
 
+                translationsToDelete.removeAll(translations);
                 translations.removeAll(translationsOld);
 
-                translationRepository.deleteAll(translationsToDelete);
+                translationRepository.deleteAll(translationsToDelete); //remove records from db that don't exist in new file
             }
-            translationRepository.saveAll(translations);
+            translationRepository.saveAll(translations); //add new records
 
         } catch (Exception e) {
             log.error(Arrays.toString(e.getStackTrace()));
         }
 
     }
+
+    private InputStream getDataFromFile(String fileId) {
+        InputStream inputStream = null;
+        try {
+            URL url = new URL("https://api.telegram.org/bot" + config.getToken() + "/getFile?file_id=" + fileId);
+
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(url.openStream()));
+            String getFileResponse = bufferedReader.readLine();
+
+            JSONObject jResult = new JSONObject(getFileResponse);
+            JSONObject path = jResult.getJSONObject("result");
+            String filePath = path.getString("file_path");
+
+            inputStream = new URL(
+                    "https://api.telegram.org/file/bot" + config.getToken() + "/" + filePath).openStream();
+
+            bufferedReader.close();
+            inputStream.close();
+        } catch (Exception e) {
+            log.error(Arrays.toString(e.getStackTrace()));
+        }
+        return inputStream;
+    }
+
     private void changePriority(User user, boolean increase) {
         Integer lastPhraseId = user.getLastPhraseId();
 
