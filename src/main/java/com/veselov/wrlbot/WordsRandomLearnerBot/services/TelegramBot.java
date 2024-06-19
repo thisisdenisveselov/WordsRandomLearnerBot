@@ -1,4 +1,4 @@
-package com.veselov.wrlbot.WordsRandomLearnerBot.service;
+package com.veselov.wrlbot.WordsRandomLearnerBot.services;
 
 import com.vdurmont.emoji.EmojiParser;
 import com.veselov.wrlbot.WordsRandomLearnerBot.config.BotConfig;
@@ -41,14 +41,17 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Autowired
     private TranslationRepository translationRepository;
 
-    static final String HELP_TEXT = "This bot is created to make it easier to remember new English words. \n\n" +
+    static final String HELP_TEXT = "This bot is created to make it easier to remember English words " +
+            "that had been added to \"Saved\" list in Google Translate. \n\n" +
             "You can execute commands from the main menu on the left or by typing a command: \n\n" +
             "Type /start to see a welcome message\n\n" +
-            "Type /mydata to see data stored about yourself\n\n" +
+            "Type /update to update/upload new phrases list\n\n" +
+            "Type /nexteng to get next phrase on English\n\n" +
+            "Type /nextru to get next phrase on Russian\n\n" +
             "Type /help to see this message again";
     private static final String ENGLISH = "English";
     private static final String RUSSIAN = "Russian";
-    private static final int STEPS_AMOUNT = 8;  // the number of iterations after which the phrase can be shown again
+    private static final int STEPS_AMOUNT = 20;  // the number of iterations after which the phrase can be shown again
     private static final String DEFAULT_PHRASES = "DEFAULT_PHRASES";
     private static final String FROM_ENG_BUTTON = "FROM_ENG_BUTTON";
     private static final String FROM_RU_BUTTON = "FROM_RU_BUTTON";
@@ -70,7 +73,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         listOfCommands.add(new BotCommand("/nextru", "next phrase on Russian"));
         listOfCommands.add(new BotCommand("/translation", "show translation"));
         listOfCommands.add(new BotCommand("/help", "info how to use this bot"));
-        listOfCommands.add(new BotCommand("/settings", "set your settings"));
 
         try{
             this.execute(new SetMyCommands(listOfCommands, new BotCommandScopeDefault(), null));
@@ -102,18 +104,13 @@ public class TelegramBot extends TelegramLongPollingBot {
                     registerUser(update.getMessage());
                     showStart(chatId, update.getMessage().getChat().getFirstName());
                 }
-                case "/update" -> useDefaultPhrases(chatId, user);
-                case "/nexteng" -> {
-                    setCurrentLanguage(ENGLISH, chatId);
-                    showNext(chatId, user, null);
-                }
-                case "/nextru" -> {
-                    setCurrentLanguage(RUSSIAN, chatId);
-                    showNext(chatId, user, null);
-                }
-                case "/translation" -> showTranslation(chatId, user);
-                default -> commandNotFound(chatId);
+                case "/update" -> showStart(chatId, update.getMessage().getChat().getFirstName());
+                case "/nexteng" -> showNext(chatId, user, ENGLISH);
 
+                case "/nextru" -> showNext(chatId, user, RUSSIAN);
+                case "/translation" -> showTranslation(chatId, user);
+                case "/help" -> showHelp(chatId);
+                default -> commandNotFound(chatId);
             }
 
         } else if (update.hasMessage() && update.getMessage().hasDocument()) {
@@ -155,6 +152,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
             }
         }
+    }
+
+    private void showHelp(long chatId) {
+        prepareAndSendMessage(HELP_TEXT, chatId, ButtonsVariations.NO_BUTTONS);
     }
 
     private void uploadFile(User user, String fileId) {
@@ -269,15 +270,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         translationRepository.save(translation);
     }
-
-    private void setCurrentLanguage(String language, long chatId) {
-        User user = userRepository.findById(chatId).orElse(null);
-
-        if (user != null)
-            user.setCurrentLanguage(language);
-
-        userRepository.save(user);
-    }
+    
     private void showNext(long chatId, User user, String forcedLanguage) {
 
         Translation translation = translationRepository.findCustomRandomPhrase(chatId, STEPS_AMOUNT, user.getCurrentStepNumber());

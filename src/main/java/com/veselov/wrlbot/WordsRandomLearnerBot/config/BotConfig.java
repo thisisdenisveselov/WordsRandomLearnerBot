@@ -28,28 +28,4 @@ public class BotConfig {
 
     @Value("${bot.owner}")
     Long ownerId;
-
-    private final Environment environment;
-
-    /*@Autowired
-    public BotConfig(Environment environment) {
-        this.environment = environment;
-    }
-
-    @Bean
-    public DataSource dataSource() {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
-
-        dataSource.setDriverClassName(Objects.requireNonNull(environment.getProperty("spring.datasource.driverClassName")));
-        dataSource.setUrl(environment.getProperty("spring.datasource.url"));
-        dataSource.setUsername(environment.getProperty("spring.datasource.username"));
-        dataSource.setPassword(environment.getProperty("spring.datasource.password"));
-
-        return dataSource;
-    }
-    @Bean
-    public JdbcTemplate jdbcTemplate() {
-        return new JdbcTemplate(dataSource());
-    }*/
-
 }
