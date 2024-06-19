@@ -1,17 +1,15 @@
-package com.veselov.wrlbot.WordsRandomLearnerBot.services;
+package com.veselov.wrlbot.WordsRandomLearnerBot.controllers;
 
 import com.vdurmont.emoji.EmojiParser;
 import com.veselov.wrlbot.WordsRandomLearnerBot.config.BotConfig;
-import com.veselov.wrlbot.WordsRandomLearnerBot.model.*;
-import com.veselov.wrlbot.WordsRandomLearnerBot.repositories.TranslationRepository;
-import com.veselov.wrlbot.WordsRandomLearnerBot.repositories.UserRepository;
+import com.veselov.wrlbot.WordsRandomLearnerBot.model.Translation;
+import com.veselov.wrlbot.WordsRandomLearnerBot.model.User;
+import com.veselov.wrlbot.WordsRandomLearnerBot.services.TranslationService;
+import com.veselov.wrlbot.WordsRandomLearnerBot.services.UserService;
 import com.veselov.wrlbot.WordsRandomLearnerBot.util.ButtonsVariations;
+import com.veselov.wrlbot.WordsRandomLearnerBot.util.DocumentUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.xssf.usermodel.XSSFCell;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -26,9 +24,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.io.*;
-import java.net.URL;
-import java.sql.Timestamp;
 import java.util.*;
 
 @Component
@@ -36,10 +31,9 @@ import java.util.*;
 public class TelegramBot extends TelegramLongPollingBot {
 
     final BotConfig config;
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private TranslationRepository translationRepository;
+    private UserService userService;
+    private TranslationService translationService;
+    private DocumentUtil documentUtil;
 
     static final String HELP_TEXT = "This bot is created to make it easier to remember English words " +
             "that had been added to \"Saved\" list in Google Translate. \n\n" +
@@ -51,7 +45,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             "Type /help to see this message again";
     private static final String ENGLISH = "English";
     private static final String RUSSIAN = "Russian";
-    private static final int STEPS_AMOUNT = 20;  // the number of iterations after which the phrase can be shown again
     private static final String DEFAULT_PHRASES = "DEFAULT_PHRASES";
     private static final String FROM_ENG_BUTTON = "FROM_ENG_BUTTON";
     private static final String FROM_RU_BUTTON = "FROM_RU_BUTTON";
@@ -59,13 +52,18 @@ public class TelegramBot extends TelegramLongPollingBot {
     private static final String KNOW_BUTTON = "KNOW_BUTTON";
     private static final String DO_NOT_KNOW_BUTTON = "DO_NOT_KNOW_BUTTON";
     private static final Long ADMIN_CHAT_ID = 291573027L;
-    private static final int DEFAULT_PRIORITY = 0;
-    private static final int DEFAULT_STEP_NUMBER = 0;
 
-
-    public TelegramBot(BotConfig config) {
+    @Autowired
+    public TelegramBot(BotConfig config, UserService userService, TranslationService translationService, DocumentUtil documentUtil) {
         this.config = config;
+        this.userService = userService;
+        this.translationService = translationService;
+        this.documentUtil = documentUtil;
 
+        addMenuCommands();
+    }
+
+    private void addMenuCommands() {
         List<BotCommand> listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "get a welcome message"));
         listOfCommands.add(new BotCommand("/update", "update your phrases list"));
@@ -97,7 +95,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
-            User user = userRepository.findById(chatId).orElse(null);
+            User user = getUserByChatId(chatId);
+            if (user == null)
+                prepareAndSendMessage("User not found", chatId, ButtonsVariations.NO_BUTTONS);
 
             switch (messageText) {
                 case "/start" -> {
@@ -116,12 +116,15 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else if (update.hasMessage() && update.getMessage().hasDocument()) {
             long chatId = update.getMessage().getChatId();
             Document document = update.getMessage().getDocument();
-            User user = userRepository.findById(chatId).orElse(null);
+            User user = getUserByChatId(chatId);
             
             if (document != null) {
                 String fileId = document.getFileId();
-                
-                uploadFile(user, fileId);
+
+                XSSFWorkbook workbook = documentUtil.getDataFromFile(user, fileId, config.getToken());
+                List<Translation> translations = documentUtil.parseExcelToList(workbook, user);
+
+                translationService.updateAll(translations, user);
 
                 String answer = "The list of phrases has been uploaded.\n" +
                         "Choose \"From English to Russian\" or \"From Russian to English\" translations:";
@@ -132,10 +135,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else if (update.hasCallbackQuery()) {
             String callBackData = update.getCallbackQuery().getData();
             long chatId = update.getCallbackQuery().getMessage().getChatId();
-            User user = userRepository.findById(chatId).orElse(null);
-            if (user == null)
-                prepareAndSendMessage("User not found", chatId, ButtonsVariations.NO_BUTTONS);
-
+            User user = getUserByChatId(chatId);
 
             switch (callBackData) {
                 case DEFAULT_PHRASES -> useDefaultPhrases(chatId, user);
@@ -154,126 +154,21 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    public void registerUser(Message msg) {
+        if(userService.getUserByChatId(msg.getChatId()).isEmpty()) {
+            userService.saveUser(msg);
+        }
+    }
+
+
+
     private void showHelp(long chatId) {
         prepareAndSendMessage(HELP_TEXT, chatId, ButtonsVariations.NO_BUTTONS);
     }
 
-    private void uploadFile(User user, String fileId) {
-        try {
-            InputStream inputStream = getDataFromFile(fileId);
+    public void showNext(long chatId, User user, String forcedLanguage) {
 
-            XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
-
-            XSSFSheet sheet = workbook.getSheetAt(0);
-            Iterator iterator = sheet.iterator();
-
-            List<Translation> translations = new ArrayList<>();
-            List<Translation> translationsOld = translationRepository.findAllByUser(user);
-
-            while (iterator.hasNext()) {
-                XSSFRow row = (XSSFRow) iterator.next();
-
-                Iterator cellIterator = row.cellIterator();
-
-                int columnNumber = 0;
-                String languageFrom = "";
-                String languageTo = "";
-                String phrase = "";
-                String phraseTranslation = "";
-
-                while (cellIterator.hasNext()) {
-                    XSSFCell cell = (XSSFCell) cellIterator.next();
-                    String value = cell.getStringCellValue();
-
-                    switch (columnNumber) {
-                        case 0 -> languageFrom = value;
-                        case 1 -> languageTo = value;
-                        case 2 -> phrase = value;
-                        case 3 -> phraseTranslation = value;
-                    }
-
-                    columnNumber++;
-
-                }
-
-                Translation translation = new Translation();
-
-                if ((!languageFrom.equals(ENGLISH) && !languageFrom.equals(RUSSIAN))
-                        || (!languageTo.equals(ENGLISH) && !languageTo.equals(RUSSIAN)))  //filter if neither English nor Russian
-                    continue;
-
-                switch (languageFrom) {
-                    case ENGLISH -> {
-                        translation.setPhraseEng(phrase);
-                        translation.setPhraseRu(phraseTranslation);
-                    }
-                    case RUSSIAN -> {
-                        translation.setPhraseEng(phraseTranslation);
-                        translation.setPhraseRu(phrase);
-                    }
-                }
-
-                translation.setPriority(DEFAULT_PRIORITY);
-                translation.setUser(user);
-                translation.setStepNumber(DEFAULT_STEP_NUMBER);
-
-                translations.add(translation);
-            }
-
-            if (!translationsOld.isEmpty()) {
-                List<Translation> translationsToDelete = new ArrayList<>(translationsOld);
-
-                translationsToDelete.removeAll(translations);
-                translations.removeAll(translationsOld);
-
-                translationRepository.deleteAll(translationsToDelete); //remove records from db that don't exist in new file
-            }
-            translationRepository.saveAll(translations); //add new records
-
-        } catch (Exception e) {
-            log.error(Arrays.toString(e.getStackTrace()));
-        }
-
-    }
-
-    private InputStream getDataFromFile(String fileId) {
-        InputStream inputStream = null;
-        try {
-            URL url = new URL("https://api.telegram.org/bot" + config.getToken() + "/getFile?file_id=" + fileId);
-
-            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(url.openStream()));
-            String getFileResponse = bufferedReader.readLine();
-
-            JSONObject jResult = new JSONObject(getFileResponse);
-            JSONObject path = jResult.getJSONObject("result");
-            String filePath = path.getString("file_path");
-
-            inputStream = new URL(
-                    "https://api.telegram.org/file/bot" + config.getToken() + "/" + filePath).openStream();
-
-            bufferedReader.close();
-            inputStream.close();
-        } catch (Exception e) {
-            log.error(Arrays.toString(e.getStackTrace()));
-        }
-        return inputStream;
-    }
-
-    private void changePriority(User user, boolean increase) {
-        Integer lastPhraseId = user.getLastPhraseId();
-
-        Translation translation = translationRepository.findById(lastPhraseId).orElse(null);
-        if (increase)
-            translation.setPriority(translation.getPriority() + 1);
-        else
-            translation.setPriority(translation.getPriority() - 1);
-
-        translationRepository.save(translation);
-    }
-    
-    private void showNext(long chatId, User user, String forcedLanguage) {
-
-        Translation translation = translationRepository.findCustomRandomPhrase(chatId, STEPS_AMOUNT, user.getCurrentStepNumber());
+        Translation translation = translationService.getCustomRandomPhrase(chatId, user);
 
         String currentLanguage = "";
 
@@ -281,6 +176,12 @@ public class TelegramBot extends TelegramLongPollingBot {
             currentLanguage = user.getCurrentLanguage();
         else
             currentLanguage = forcedLanguage;
+
+        int currentStepNumber = user.getCurrentStepNumber() + 1;
+
+        translationService.updateCurrentStepNumber(translation, currentStepNumber);
+
+        userService.updateUser(user, currentStepNumber, translation.getId(), currentLanguage, translation.getId());
 
         switch (currentLanguage) {
             case ENGLISH -> {
@@ -296,23 +197,14 @@ public class TelegramBot extends TelegramLongPollingBot {
                     prepareAndSendMessage("Phrase list is empty", chatId, ButtonsVariations.NO_BUTTONS);
             }
         }
-
-        int currentStepNumber = user.getCurrentStepNumber() + 1;
-        translation.setStepNumber(currentStepNumber);
-        translationRepository.save(translation);
-
-        user.setCurrentStepNumber(currentStepNumber);
-        user.setLastPhraseId(translation.getId());
-        user.setCurrentLanguage(currentLanguage);
-        userRepository.save(user);
     }
 
-    private void showTranslation(long chatId, User user) {
+    public void showTranslation(long chatId, User user) {
         Integer lastPhraseId = user.getLastPhraseId();
         String currentLanguage = user.getCurrentLanguage();
 
         if (lastPhraseId != null) {
-            var translation = translationRepository.findById(lastPhraseId);
+            var translation = translationService.getById(lastPhraseId);
 
             switch (currentLanguage) {
                 case ENGLISH -> translation.ifPresent(x -> prepareAndSendMessage(x.getPhraseRu(), chatId, ButtonsVariations.KNOW_DO_NOT_KNOW));
@@ -321,30 +213,28 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void useDefaultPhrases(long chatId, User user) {
+    private void changePriority(User user, boolean increase) {
+        translationService.changePriority(user, increase);
+    }
 
-        Optional<User> sourceUser = userRepository.findById(ADMIN_CHAT_ID);
-        if(sourceUser.isPresent())
-            copyPhrases(user, sourceUser.get());  //should copy default phrases to translations table with users id
+    private User getUserByChatId(long chatId) {
+        Optional<User> user = userService.getUserByChatId(chatId);
+        if (user.isEmpty())
+            prepareAndSendMessage("User not found", chatId, ButtonsVariations.NO_BUTTONS);
+
+        return user.get();
+    }
+
+    private void useDefaultPhrases(long chatId, User user) {
+        Optional<User>  sourceUser = userService.getUserByChatId(ADMIN_CHAT_ID);
+        if (sourceUser.isEmpty())
+            prepareAndSendMessage("There is no default library", chatId, ButtonsVariations.NO_BUTTONS);
         else
-            prepareAndSendMessage("No default list of phrases", chatId, ButtonsVariations.NO_BUTTONS);
+            translationService.copyPhrases(user, sourceUser.get());  //should copy default phrases to translations table with users id
+
 
         String answer = "Choose \"From English to Russian\" or \"From Russian to English\" translations";
         prepareAndSendMessage(answer, chatId, ButtonsVariations.FROM_RU_ENG);
-    }
-
-    private void copyPhrases(User user, User sourceUser) { // Test it !!!!
-        List<Translation> translations = translationRepository.findAllByUser(sourceUser);
-
-        for(Translation translation : translations) {
-            translation.setId(null);
-            translation.setPriority(DEFAULT_PRIORITY);
-            translation.setStepNumber(DEFAULT_STEP_NUMBER);
-            translation.setUser(user);
-        }
-
-        translationRepository.saveAll(translations);
-
     }
 
     private void showStart(long chatId, String name) {
@@ -353,28 +243,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                         "You can upload your phrases list with :paperclip: button. An attached file must be an excel file, exported from google translate saved phrases.\n\n" +
                         "Or you can test the bot with the default set of phrases.");
         prepareAndSendMessage(answer, chatId, ButtonsVariations.DEFAULT_PHRASES);
-    }
-
-    private void registerUser(Message msg) {
-
-        if(userRepository.findById(msg.getChatId()).isEmpty()) {
-
-            var chatId = msg.getChatId();
-            var chat = msg.getChat();
-
-            User user = new User();
-
-            user.setChatId(chatId);
-            user.setFirstName(chat.getFirstName());
-            user.setLastName(chat.getLastName());
-            user.setUserName(chat.getUserName());
-            user.setRegisteredAt(new Timestamp(System.currentTimeMillis()));
-            user.setCurrentStepNumber(DEFAULT_STEP_NUMBER);
-
-            userRepository.save(user);
-            log.info("User saved: " + user);
-        }
-
     }
 
     private void commandNotFound(long chatId) {
