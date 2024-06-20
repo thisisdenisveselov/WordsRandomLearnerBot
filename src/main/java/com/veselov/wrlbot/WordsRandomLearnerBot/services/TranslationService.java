@@ -11,6 +11,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -21,6 +22,7 @@ import java.util.*;
 //@Component
 @Slf4j
 @Service
+@Transactional(readOnly = true)
 public class TranslationService {
     private TranslationRepository translationRepository;
     private static final int STEPS_AMOUNT = 20;  // the number of iterations after which the phrase can be shown again
@@ -39,15 +41,18 @@ public class TranslationService {
         return translationRepository.findCustomRandomPhrase(chatId, STEPS_AMOUNT, user.getCurrentStepNumber());
     }
 
+    @Transactional
     public void updateCurrentStepNumber(Translation translation, int currentStepNumber) {
         translation.setStepNumber(currentStepNumber);
         translationRepository.save(translation);
     }
 
+    @Transactional
     public void changePriority(User user, boolean increase) {
         Integer lastPhraseId = user.getLastPhraseId();
 
         Translation translation = getById(lastPhraseId).orElse(null);
+
         if (increase)
             translation.setPriority(translation.getPriority() + 1);
         else
@@ -56,6 +61,7 @@ public class TranslationService {
         translationRepository.save(translation);
     }
 
+    @Transactional
     public void copyPhrases(User user, User sourceUser) { // Test it !!!!
         List<Translation> translations = translationRepository.findAllByUser(sourceUser);
 
@@ -70,6 +76,7 @@ public class TranslationService {
     }
 
 
+    @Transactional
     public void updateAll(List<Translation> translations, User user) {
         List<Translation> translationsOld = translationRepository.findAllByUser(user);
 

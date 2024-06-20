@@ -1,10 +1,12 @@
 package com.veselov.wrlbot.WordsRandomLearnerBot.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity(name = "Translation")
-@Data
+@Getter
+@Setter
 public class Translation {
 
     @Id

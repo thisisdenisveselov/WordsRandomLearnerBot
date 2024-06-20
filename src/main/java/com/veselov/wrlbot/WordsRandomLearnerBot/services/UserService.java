@@ -5,6 +5,7 @@ import com.veselov.wrlbot.WordsRandomLearnerBot.repositories.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import java.sql.Timestamp;
@@ -13,6 +14,7 @@ import java.util.*;
 //@Component
 @Slf4j
 @Service
+@Transactional(readOnly = true)
 public class UserService {
 
     private UserRepository userRepository;
@@ -27,6 +29,7 @@ public class UserService {
         return userRepository.findById(chatId);
     }
 
+    @Transactional
     public void saveUser(Message msg) {
         var chatId = msg.getChatId();
         var chat = msg.getChat();
@@ -44,6 +47,7 @@ public class UserService {
         log.info("User saved: " + user);
     }
 
+    @Transactional
     public void updateUser(User user, int currentStepNumber, Integer id, String currentLanguage, int translationId) {
         user.setCurrentStepNumber(currentStepNumber);
         user.setLastPhraseId(translationId);
