@@ -1,7 +1,6 @@
 package com.veselov.wrlbot.WordsRandomLearnerBot.config;
 
 import com.veselov.wrlbot.WordsRandomLearnerBot.controllers.TelegramBot;
-import com.veselov.wrlbot.WordsRandomLearnerBot.services.UserService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

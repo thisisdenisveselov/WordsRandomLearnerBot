@@ -12,15 +12,13 @@ import org.springframework.test.web.servlet.MockMvc;
 @ExtendWith(MockitoExtension.class)
 public class TelegramBotTest {
 
-    @Mock
+   /* @Mock
     private UserService userService;
 
     @Mock
     private TranslationService translationService;
 
     @InjectMocks
-    private TelegramBot telegramBot;
-
-
+    private TelegramBot telegramBot;*/
 
 }

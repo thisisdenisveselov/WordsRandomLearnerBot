@@ -4,19 +4,10 @@ import com.veselov.wrlbot.WordsRandomLearnerBot.model.Translation;
 import com.veselov.wrlbot.WordsRandomLearnerBot.model.User;
 import com.veselov.wrlbot.WordsRandomLearnerBot.repositories.TranslationRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.xssf.usermodel.XSSFCell;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.URL;
 import java.util.*;
 
 //@Component
