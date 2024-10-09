@@ -95,9 +95,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
-            User user = getUserByChatId(chatId);
-            if (user == null)
-                prepareAndSendMessage("User not found", chatId, ButtonsVariations.NO_BUTTONS);
 
             switch (messageText) {
                 case "/start" -> {
@@ -105,10 +102,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                     showStart(chatId, update.getMessage().getChat().getFirstName());
                 }
                 case "/update" -> showStart(chatId, update.getMessage().getChat().getFirstName());
-                case "/nexteng" -> showNext(chatId, user, ENGLISH);
+                case "/nexteng" -> showNext(chatId, ENGLISH);
 
-                case "/nextru" -> showNext(chatId, user, RUSSIAN);
-                case "/translation" -> showTranslation(chatId, user);
+                case "/nextru" -> showNext(chatId, RUSSIAN);
+                case "/translation" -> showTranslation(chatId);
                 case "/help" -> showHelp(chatId);
                 default -> commandNotFound(chatId);
             }
@@ -139,16 +136,16 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             switch (callBackData) {
                 case DEFAULT_PHRASES -> useDefaultPhrases(chatId, user);
-                case FROM_ENG_BUTTON -> showNext(chatId, user, ENGLISH); //happened, if "Phrases list has been updated" occurred, and "From English" pressed
-                case FROM_RU_BUTTON -> showNext(chatId, user, RUSSIAN); //happened, if "Phrases list has been updated" occurred, and "From Russian" pressed
-                case TRANSLATION_BUTTON -> showTranslation(chatId, user);
+                case FROM_ENG_BUTTON -> showNext(chatId, ENGLISH); //happened, if "Phrases list has been updated" occurred, and "From English" pressed
+                case FROM_RU_BUTTON -> showNext(chatId, RUSSIAN); //happened, if "Phrases list has been updated" occurred, and "From Russian" pressed
+                case TRANSLATION_BUTTON -> showTranslation(chatId);
                 case KNOW_BUTTON -> {
                     changePriority(user, false); //phrase should occur less frequently
-                    showNext(chatId, user, null);
+                    showNext(chatId, null);
                 }
                 case DO_NOT_KNOW_BUTTON -> {
                     changePriority(user, true);  // phrase should occur more frequently
-                    showNext(chatId, user, null);
+                    showNext(chatId, null);
                 }
             }
         }
@@ -166,7 +163,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         prepareAndSendMessage(HELP_TEXT, chatId, ButtonsVariations.NO_BUTTONS);
     }
 
-    public void showNext(long chatId, User user, String forcedLanguage) {
+    public void showNext(long chatId, String forcedLanguage) {
+
+        User user = getUserByChatId(chatId);
 
         Translation translation = translationService.getCustomRandomPhrase(chatId, user);
 
@@ -199,7 +198,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    public void showTranslation(long chatId, User user) {
+    public void showTranslation(long chatId) {
+        User user = getUserByChatId(chatId);
+
         Integer lastPhraseId = user.getLastPhraseId();
         String currentLanguage = user.getCurrentLanguage();
 
@@ -219,6 +220,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private User getUserByChatId(long chatId) {
         Optional<User> user = userService.getUserByChatId(chatId);
+
         if (user.isEmpty())
             prepareAndSendMessage("User not found", chatId, ButtonsVariations.NO_BUTTONS);
 

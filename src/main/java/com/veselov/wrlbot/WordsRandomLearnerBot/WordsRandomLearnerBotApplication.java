@@ -9,6 +9,4 @@ public class WordsRandomLearnerBotApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(WordsRandomLearnerBotApplication.class, args);
 	}
-
-
 }

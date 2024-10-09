@@ -16,7 +16,7 @@ public class User {
     @Column(name = "chat_id")
     private Long chatId;
 
-    @Column(name = "first_name")
+    @Column(name = "first_name") //no necessary
     private String firstName;
 
     @Column(name = "last_name")
